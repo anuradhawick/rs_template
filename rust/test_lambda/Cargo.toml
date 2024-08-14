@@ -1,0 +1,14 @@
+[package]
+name = "test_lambda"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+aws_lambda_events = "0.15.1"
+lambda_runtime = "0.13.0"
+serde = { version = "1.0.207", features = ["derive"] }
+serde_json = "1.0.124"
+tokio = "1.39.2"
+router_container = { path = "../router_container" }
+router_macro = { path = "../router_macro" }
+ctor = "0.2.8"

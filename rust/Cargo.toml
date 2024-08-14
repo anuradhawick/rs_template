@@ -1,0 +1,3 @@
+[workspace]
+members = ["test_lambda", "router_container", "router_macro"]
+resolver = "2"

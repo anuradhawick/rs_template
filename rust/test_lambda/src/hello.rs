@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 
 // adding a GET request handler to path /hello
 #[route(path = "/hello", method = "get")]
-fn hello_get(_event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<Value> {
+pub fn hello_get(_event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<Value> {
     Ok(json!({
         "success": true
     }))
@@ -14,7 +14,7 @@ fn hello_get(_event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<Value> {
 
 // adding a POST request handler to path /hello
 #[route(path = "/hello", method = "post")]
-fn hello_post(event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<Value> {
+pub fn hello_post(event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<Value> {
     // parsing the event body getting the serde_json::Value object
     // using unwrap_or(default) is recommended for smaller objects (like empty json)
     // if this becomes massive, use unwrap_or_else(|| "{}",into())

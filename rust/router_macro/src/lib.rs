@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
     parse::{Parse, ParseStream},
-    LitStr, Token,
+    Ident, LitStr, Token,
 };
 use syn::{parse_macro_input, ItemFn};
 
@@ -41,6 +41,8 @@ impl Parse for LambdaHandler {
     }
 }
 
+static mut ROUTE_ENTRIES: Vec<(String, String, String)> = Vec::new();
+
 #[proc_macro_attribute]
 pub fn route(args: TokenStream, input: TokenStream) -> TokenStream {
     let args: LambdaHandler = parse_macro_input!(args as LambdaHandler);
@@ -49,22 +51,40 @@ pub fn route(args: TokenStream, input: TokenStream) -> TokenStream {
     let path = &args.path;
     let method = &args.method;
 
-    println!("Method register {:?}", args.method);
-    println!("Path register   {:?}", args.path);
+    println!("Method: {:?} Path: {:?}", args.method, args.path);
 
+    unsafe {
+        ROUTE_ENTRIES.push((method.into(), path.into(), func_name.to_string()));
+    }
+
+    // Generate function as usual
     let token_stream = quote! {
         #function
-        // anonymous function
-        const _: () = {
-            #[::ctor::ctor]
-            fn register_route() {
-                let path = #path;
-                let method = #method;
-                let handler = #func_name;
-                router_container::register_route(path, method, handler);
-            }
-        };
     };
 
     token_stream.into()
+}
+
+#[proc_macro]
+pub fn generate_routes(_input: TokenStream) -> TokenStream {
+    let mut route_inserts = vec![];
+
+    unsafe {
+        for (method, path, handler) in ROUTE_ENTRIES.iter() {
+            let handler_ident = syn::Ident::new(handler, proc_macro2::Span::call_site());
+
+            route_inserts.push(quote! {
+                trie.insert(#method, #path, #handler_ident);
+            });
+        }
+    }
+
+    let expanded = quote! {
+        use router_container::Trie;
+        let mut trie = Trie::new();
+
+        #(#route_inserts)*
+    };
+
+    expanded.into()
 }

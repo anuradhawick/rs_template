@@ -797,10 +797,13 @@ dependencies = [
 name = "router_macro"
 version = "0.1.0"
 dependencies = [
+ "aws_lambda_events",
  "ctor",
+ "lambda_runtime",
  "proc-macro2",
  "quote",
  "router_container",
+ "serde_json",
  "syn",
 ]
 

@@ -1,64 +1,92 @@
-#[macro_use]
-extern crate lazy_static;
-use aws_lambda_events::apigw::{ApiGatewayV2httpRequest, ApiGatewayV2httpResponse};
-use aws_lambda_events::http::{HeaderMap, Result};
+use std::{collections::HashMap, env::current_exe};
+
+use aws_lambda_events::{apigw::ApiGatewayV2httpRequest, http::Result};
 use lambda_runtime::LambdaEvent;
 use serde_json::Value;
-use std::collections::HashMap;
-use std::sync::Mutex;
 
-// Define a type for your route handlers. For simplicity, we use a function pointer that takes no arguments and returns nothing.
-type Handler = fn(LambdaEvent<ApiGatewayV2httpRequest>) -> Result<Value>;
-
-// This is the global route registry.
-lazy_static! {
-    pub static ref ROUTES: Mutex<HashMap<(String, String), Handler>> = Mutex::new(HashMap::new());
+#[derive(Debug)]
+pub struct TrieNode {
+    children: HashMap<String, TrieNode>,
+    is_end_of_path: bool,
+    method: Option<String>,
+    parameter_name: Option<String>,
+    handler: Option<Handler>,
 }
 
-// This function is used by the generated code to register routes.
-pub fn register_route(path: &str, method: &str, handler: Handler) {
-    let mut routes = ROUTES.lock().unwrap();
-    routes.insert(
-        (path.to_string(), method.to_uppercase().to_string()),
-        handler,
-    );
+impl TrieNode {
+    fn new() -> Self {
+        TrieNode {
+            children: HashMap::new(),
+            is_end_of_path: false,
+            method: None,
+            parameter_name: None,
+            handler: None,
+        }
+    }
 }
 
-// Handle the request
-pub fn handle_request(
-    event: LambdaEvent<ApiGatewayV2httpRequest>,
-) -> Result<ApiGatewayV2httpResponse> {
-    let routes = ROUTES.lock().unwrap();
-    let path = event
-        .payload
-        .request_context
-        .http
-        .path
-        .clone()
-        .unwrap_or("-".to_string());
-    let method = event.payload.request_context.http.method.to_string();
+#[derive(Debug)]
+pub struct Trie {
+    root: TrieNode,
+}
 
-    println!(
-        "Event received: {}",
-        serde_json::to_string(&event.payload).unwrap()
-    );
-
-    if let Some(handler) = routes.get(&(path, method)) {
-        let value = handler(event)?;
-        let mut headers = HeaderMap::new();
-        headers.insert("content-type", "application/json".parse().unwrap());
-        return Ok(ApiGatewayV2httpResponse {
-            status_code: 200,
-            body: Some(value.to_string().into()),
-            multi_value_headers: headers.clone(),
-            headers,
-            ..Default::default()
-        });
+impl Trie {
+    pub fn new() -> Self {
+        Trie {
+            root: TrieNode::new(),
+        }
     }
 
-    Ok(ApiGatewayV2httpResponse {
-        status_code: 404,
-        body: Some(format!("Handler not found for path: {:?}", event).into()),
-        ..Default::default()
-    })
+    pub fn insert(&mut self, method: &str, path: &str, handler: Handler) {
+        let mut current_node = &mut self.root;
+        let parts = path.split('/').filter(|part| !part.is_empty());
+
+        for part in parts {
+            let is_parameter = part.starts_with(':');
+            let key = if is_parameter {
+                ":".to_string()
+            } else {
+                part.to_string()
+            };
+
+            current_node = current_node
+                .children
+                .entry(key.clone())
+                .or_insert_with(TrieNode::new);
+
+            if is_parameter {
+                current_node.parameter_name = Some(part[1..].to_string());
+            }
+        }
+        current_node.is_end_of_path = true;
+        current_node.handler = Some(handler);
+        current_node.method = Some(method.to_string());
+    }
+
+    pub fn find(&self, method: &str, path: &str) -> Option<HashMap<String, String>> {
+        let mut current_node = &self.root;
+        let mut params = HashMap::new();
+
+        for part in path.split('/').filter(|part| !part.is_empty()) {
+            if let Some(node) = current_node.children.get(part) {
+                current_node = node;
+            } else if let Some(param_node) = current_node.children.get(":") {
+                if let Some(param_name) = &param_node.parameter_name {
+                    params.insert(param_name.clone(), part.to_string());
+                }
+                current_node = param_node;
+            } else {
+                return None;
+            }
+        }
+
+        if current_node.is_end_of_path && current_node.method.as_deref() == Some(method) {
+            Some(params)
+        } else {
+            None
+        }
+    }
 }
+
+// Define a type for your route handlers. For simplicity, we use a function pointer that takes no arguments and returns nothing.
+pub type Handler = fn(LambdaEvent<ApiGatewayV2httpRequest>) -> Result<Value>;

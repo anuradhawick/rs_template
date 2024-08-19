@@ -1,19 +1,21 @@
-use std::{collections::HashMap, env::current_exe};
-
-use aws_lambda_events::{apigw::ApiGatewayV2httpRequest, http::Result};
+use aws_lambda_events::http::Result;
 use lambda_runtime::LambdaEvent;
 use serde_json::Value;
+use std::collections::HashMap;
 
-#[derive(Debug)]
-pub struct TrieNode {
-    children: HashMap<String, TrieNode>,
+// Define a type for your route handlers. For simplicity, we use a function pointer that takes no arguments and returns nothing.
+pub type Handler<T> = fn(LambdaEvent<T>) -> Result<Value>;
+
+#[derive(Debug, PartialEq)]
+pub struct TrieNode<T> {
+    children: HashMap<String, TrieNode<T>>,
     is_end_of_path: bool,
     method: Option<String>,
     parameter_name: Option<String>,
-    handler: Option<Handler>,
+    handler: Option<Handler<T>>,
 }
 
-impl TrieNode {
+impl<T> TrieNode<T> {
     fn new() -> Self {
         TrieNode {
             children: HashMap::new(),
@@ -25,19 +27,25 @@ impl TrieNode {
     }
 }
 
-#[derive(Debug)]
-pub struct Trie {
-    root: TrieNode,
+#[derive(Debug, PartialEq)]
+pub struct Trie<T> {
+    root: TrieNode<T>,
 }
 
-impl Trie {
+impl<T> Default for Trie<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T> Trie<T> {
     pub fn new() -> Self {
         Trie {
             root: TrieNode::new(),
         }
     }
 
-    pub fn insert(&mut self, method: &str, path: &str, handler: Handler) {
+    pub fn insert(&mut self, method: &str, path: &str, handler: Handler<T>) {
         let mut current_node = &mut self.root;
         let parts = path.split('/').filter(|part| !part.is_empty());
 
@@ -63,7 +71,7 @@ impl Trie {
         current_node.method = Some(method.to_string());
     }
 
-    pub fn find(&self, method: &str, path: &str) -> Option<HashMap<String, String>> {
+    pub fn route(&self, method: &str, path: &str) -> Option<(Handler<T>, HashMap<String, String>)> {
         let mut current_node = &self.root;
         let mut params = HashMap::new();
 
@@ -80,13 +88,87 @@ impl Trie {
             }
         }
 
-        if current_node.is_end_of_path && current_node.method.as_deref() == Some(method) {
-            Some(params)
+        if current_node.is_end_of_path
+            && current_node.method.as_deref() == Some(method.to_uppercase().as_str())
+        {
+            let handler = current_node.handler.unwrap();
+            Some((handler, params))
         } else {
             None
         }
     }
 }
 
-// Define a type for your route handlers. For simplicity, we use a function pointer that takes no arguments and returns nothing.
-pub type Handler = fn(LambdaEvent<ApiGatewayV2httpRequest>) -> Result<Value>;
+#[cfg(test)]
+mod trie_tests {
+    use crate::{Trie, TrieNode};
+    use aws_lambda_events::{apigw::ApiGatewayV2httpRequest, http::Result};
+    use lambda_runtime::LambdaEvent;
+    use serde_json::{json, Value};
+    use std::collections::HashMap;
+
+    fn blank(_e: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<Value> {
+        Ok(json!({"success": true}))
+    }
+
+    #[test]
+    fn add_routes() {
+        let mut trie = Trie::new();
+        trie.insert("get", "/test", blank);
+
+        let trie_ref = Trie {
+            root: TrieNode {
+                children: HashMap::from([(
+                    "test".into(),
+                    TrieNode {
+                        children: HashMap::new(),
+                        is_end_of_path: true,
+                        method: Some("get".into()),
+                        parameter_name: None,
+                        handler: Some(blank),
+                    },
+                )]),
+                is_end_of_path: false,
+                method: None,
+                parameter_name: None,
+                handler: None,
+            },
+        };
+        assert_eq!(trie, trie_ref);
+    }
+
+    #[test]
+    fn add_param_routes() {
+        let mut trie = Trie::new();
+        trie.insert("get", "/test/:id", blank);
+
+        let trie_ref = Trie {
+            root: TrieNode {
+                children: HashMap::from([(
+                    "test".into(),
+                    TrieNode {
+                        children: HashMap::from([(
+                            ":".into(),
+                            TrieNode {
+                                children: HashMap::new(),
+                                handler: Some(blank),
+                                is_end_of_path: true,
+                                parameter_name: Some("id".into()),
+                                method: Some("get".into()),
+                            },
+                        )]),
+                        is_end_of_path: false,
+                        method: None,
+                        parameter_name: None,
+                        handler: None,
+                    },
+                )]),
+                is_end_of_path: false,
+                method: None,
+                parameter_name: None,
+                handler: None,
+            },
+        };
+        assert_eq!(trie, trie_ref);
+    }
+}

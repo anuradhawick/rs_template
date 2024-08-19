@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
     parse::{Parse, ParseStream},
-    Ident, LitStr, Token,
+    LitStr, Token,
 };
 use syn::{parse_macro_input, ItemFn};
 
@@ -79,11 +79,16 @@ pub fn generate_routes(_input: TokenStream) -> TokenStream {
         }
     }
 
+    // return the trie
     let expanded = quote! {
-        use router_container::Trie;
-        let mut trie = Trie::new();
+        {
+            use router_container::Trie;
+            let mut trie = Trie::new();
 
-        #(#route_inserts)*
+            #(#route_inserts)*
+
+            trie
+        }
     };
 
     expanded.into()

@@ -12,6 +12,21 @@ pub fn hello_get(_event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<Value> 
     }))
 }
 
+// adding a GET request handler to path /hello/:id to demo path params
+#[route(path = "/hello/:id", method = "get")]
+pub fn hello_id_get(event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<Value> {
+    let id = event
+        .payload
+        .path_parameters
+        .get("id")
+        .unwrap_or(&String::from(""))
+        .clone();
+    Ok(json!({
+        "success": true,
+        "id": id
+    }))
+}
+
 // adding a POST request handler to path /hello
 #[route(path = "/hello", method = "post")]
 pub fn hello_post(event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<Value> {
@@ -38,6 +53,8 @@ pub fn hello_post(event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<Value> 
 
 #[cfg(test)]
 mod hello_tests {
+    use std::collections::HashMap;
+
     use super::*;
     use lambda_runtime::Context;
 
@@ -53,6 +70,24 @@ mod hello_tests {
         assert!(res.is_ok());
         // unwrap and validate the body; using unwrap in tests is totally fine
         assert_eq!(json!({ "success": true }), res.unwrap());
+    }
+
+    #[test]
+    fn hello_id_get_test() {
+        // create a mock request and call the hello_get function
+        let res = hello_id_get(LambdaEvent {
+            // use defaults
+            payload: ApiGatewayV2httpRequest {
+                // add the path param
+                path_parameters: HashMap::from([("id".into(), "my_id".into())]),
+                ..Default::default()
+            },
+            context: Context::default(),
+        });
+        // assert that result is is not an error
+        assert!(res.is_ok());
+        // unwrap and validate the body; using unwrap in tests is totally fine
+        assert_eq!(json!({ "success": true, "id": "my_id" }), res.unwrap());
     }
 
     #[test]

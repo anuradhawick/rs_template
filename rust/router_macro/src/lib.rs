@@ -51,7 +51,10 @@ pub fn route(args: TokenStream, input: TokenStream) -> TokenStream {
     let path = &args.path;
     let method = &args.method;
 
-    println!("Method: {:?} Path: {:?}", args.method, args.path);
+    println!(
+        "MacroExec - Method: {:?} Path: {:?}",
+        args.method, args.path
+    );
 
     unsafe {
         ROUTE_ENTRIES.push((method.into(), path.into(), func_name.to_string()));

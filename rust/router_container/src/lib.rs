@@ -5,6 +5,9 @@ use std::collections::HashMap;
 
 // Define a type for your route handlers. For simplicity, we use a function pointer that takes no arguments and returns nothing.
 pub type Handler<T> = fn(LambdaEvent<T>) -> Result<Value>;
+// for all async version follow below
+// pub type Handler<T> = fn(LambdaEvent<T>) -> dyn Future<Output = Result<Value>>;
+// this will be a breaking change and a TODO for now
 
 #[derive(Debug, PartialEq)]
 pub struct TrieNode<T> {
@@ -68,7 +71,7 @@ impl<T> Trie<T> {
         }
         current_node.is_end_of_path = true;
         current_node.handler = Some(handler);
-        current_node.method = Some(method.to_string());
+        current_node.method = Some(method.to_uppercase().to_string());
     }
 
     pub fn route(&self, method: &str, path: &str) -> Option<(Handler<T>, HashMap<String, String>)> {
@@ -91,7 +94,7 @@ impl<T> Trie<T> {
         if current_node.is_end_of_path
             && current_node.method.as_deref() == Some(method.to_uppercase().as_str())
         {
-            let handler = current_node.handler.unwrap();
+            let handler = current_node.handler?;
             Some((handler, params))
         } else {
             None
@@ -123,7 +126,7 @@ mod trie_tests {
                     TrieNode {
                         children: HashMap::new(),
                         is_end_of_path: true,
-                        method: Some("get".into()),
+                        method: Some("GET".into()),
                         parameter_name: None,
                         handler: Some(blank),
                     },
@@ -154,7 +157,7 @@ mod trie_tests {
                                 handler: Some(blank),
                                 is_end_of_path: true,
                                 parameter_name: Some("id".into()),
-                                method: Some("get".into()),
+                                method: Some("GET".into()),
                             },
                         )]),
                         is_end_of_path: false,

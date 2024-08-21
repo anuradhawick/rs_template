@@ -77,56 +77,83 @@ serde_json = "1.0.124"
 tokio = "1.39.2"
 router_container = { path = "../router_container" }
 router_macro = { path = "../router_macro" }
-ctor = "0.2.8"
+once_cell = "1.19.0"
 ```
 
-Update the `main.rs` of the newly created package as follows.
+Update the `main.rs` of the newly created package as follows. Note that handler function is placed in `main.rs` to provide the maximum configurability. If you wish to move it to a different file you can do it. In that case compiler will likely need you to move the `mod hello; use hello::*` accordingly as well.
 
 ```rust
 use aws_lambda_events::apigw::{ApiGatewayV2httpRequest, ApiGatewayV2httpResponse};
 use aws_lambda_events::encodings::Error;
+use aws_lambda_events::http::HeaderMap;
 use lambda_runtime::{service_fn, LambdaEvent};
-use router_container::handle_request;
-// add following line in case you are making a new file called hello2.rs
-// always add new routes in a different file (e.g. hello2.rs)
-mod hello2;
+use once_cell::sync::Lazy;
+use router_container::Trie;
+use router_macro::generate_routes;
+// import modules and module functions here
+mod hello;
+use hello::*;
+
+// this is the only allocation that happens related to routing
+static TRIE: Lazy<Trie<ApiGatewayV2httpRequest>> = Lazy::new(|| generate_routes!());
 
 async fn handler(
-    event: LambdaEvent<ApiGatewayV2httpRequest>,
+    mut event: LambdaEvent<ApiGatewayV2httpRequest>,
 ) -> Result<ApiGatewayV2httpResponse, Error> {
-    // you can handle authentication for the lambda function here
-    let Ok(res) = handle_request(event) else {
+    // extract method and path
+    let method = event.payload.request_context.http.method.as_ref();
+    let path = event
+        .payload
+        .request_context
+        .http
+        .path
+        .as_deref()
+        .unwrap_or("");
+    // get handler and inject path params
+    let Some((handler, params)) = TRIE.route(method, path) else {
+        return Ok(ApiGatewayV2httpResponse {
+            status_code: 404,
+            body: Some("Route not found".into()),
+            ..Default::default()
+        });
+    };
+    event.payload.path_parameters.extend(params.into_iter());
+
+    // try to call handle the routes received here
+    let Ok(value) = handler(event) else {
+        // if failed, report as 500 Server Error
         return Ok(ApiGatewayV2httpResponse {
             status_code: 500,
             body: Some("Internal server error".into()),
             ..Default::default()
         });
     };
-    Ok(res)
+    let mut headers = HeaderMap::new();
+    headers.insert("content-type", "application/json".parse().unwrap());
+
+    Ok(ApiGatewayV2httpResponse {
+        status_code: 200,
+        body: Some(value.to_string().into()),
+        multi_value_headers: headers.clone(),
+        headers,
+        ..Default::default()
+    })
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+    // we initate the event loop here
     lambda_runtime::run(service_fn(handler)).await
 }
 ```
 
-To add new routes create a file and update the content as follows. Let's say you added `hello2.rs`
+I have added more comments inside the rust files.
 
-```rust
-use aws_lambda_events::apigw::ApiGatewayV2httpRequest;
-use aws_lambda_events::http::Result;
-use lambda_runtime::LambdaEvent;
-use router_macro::route;
-use serde_json::{json, Value};
+## Authentication
 
-#[route(path = "/hello", method = "get")]
-fn hello_get(_event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<Value> {
-    Ok(json!({
-        "success": true
-    }))
-}
-```
+You can authenticate inside the `main.rs` or `hello.rs`. Event object has the complete request context including the auth contexts.
+
+## Development
 
 Follow the style in `test_lambda` folder to add test, routes, etc. You can always add more libraries as needed.
 

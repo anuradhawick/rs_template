@@ -174,16 +174,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ctor"
-version = "0.2.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edb49164822f3ee45b17acd4a208cfc1251410cf0cad9a833234c9890774dd9f"
-dependencies = [
- "quote",
- "syn",
-]
-
-[[package]]
 name = "darling"
 version = "0.20.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -797,10 +787,12 @@ dependencies = [
 name = "router_macro"
 version = "0.1.0"
 dependencies = [
- "ctor",
+ "aws_lambda_events",
+ "lambda_runtime",
  "proc-macro2",
  "quote",
  "router_container",
+ "serde_json",
  "syn",
 ]
 
@@ -954,8 +946,8 @@ name = "test_lambda"
 version = "0.1.0"
 dependencies = [
  "aws_lambda_events",
- "ctor",
  "lambda_runtime",
+ "once_cell",
  "router_container",
  "router_macro",
  "serde",

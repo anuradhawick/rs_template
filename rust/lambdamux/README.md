@@ -1,5 +1,11 @@
 # lambdamux
 
+[![Publish crates](https://github.com/anuradhawick/rs_template/actions/workflows/publish-crates.yml/badge.svg)](https://github.com/anuradhawick/rs_template/actions/workflows/publish-crates.yml)
+[![Crates.io](https://img.shields.io/crates/v/lambdamux.svg)](https://crates.io/crates/lambdamux)
+[![Downloads](https://img.shields.io/crates/d/lambdamux.svg)](https://crates.io/crates/lambdamux)
+[![Docs.rs](https://docs.rs/lambdamux/badge.svg)](https://docs.rs/lambdamux)
+[![License](https://img.shields.io/crates/l/lambdamux.svg)](https://crates.io/crates/lambdamux)
+
 `lambdamux` is an AWS Lambda HTTP router for Rust.
 
 It lets you write route handlers with `#[route(...)]` attributes and dispatch API Gateway requests without managing a global route cache yourself.
@@ -22,7 +28,7 @@ aws_lambda_events = "1.2.0"
 lambda_runtime = "1.3.0"
 serde_json = "1.0"
 tokio = "1.52.3"
-lambdamux = "0.1.0"
+lambdamux = "1.0.0"
 ```
 
 ## Quick Start

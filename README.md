@@ -1,5 +1,10 @@
 # Rust AWS Lambda Template
 
+[![Publish crates](https://github.com/anuradhawick/rs_template/actions/workflows/publish-crates.yml/badge.svg)](https://github.com/anuradhawick/rs_template/actions/workflows/publish-crates.yml)
+[![Crates.io](https://img.shields.io/crates/v/lambdamux.svg)](https://crates.io/crates/lambdamux)
+[![Docs.rs](https://docs.rs/lambdamux/badge.svg)](https://docs.rs/lambdamux)
+[![License](https://img.shields.io/crates/l/lambdamux.svg)](https://crates.io/crates/lambdamux)
+
 This repository contains a Rust-based AWS Lambda function, managed using the cargo-lambda tool and deployed via Terraform.
 
 The workspace now includes a publishable router family built around `lambdamux`:

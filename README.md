@@ -5,15 +5,23 @@
 [![Docs.rs](https://docs.rs/lambdamux/badge.svg)](https://docs.rs/lambdamux)
 [![License](https://img.shields.io/crates/l/lambdamux.svg)](https://crates.io/crates/lambdamux)
 
-This repository contains a Rust-based AWS Lambda function, managed using the cargo-lambda tool and deployed via Terraform.
+This repository contains a Rust-based AWS Lambda HTTP API template, managed with `cargo-lambda` and deployed with Terraform.
 
-The workspace now includes a publishable router family built around `lambdamux`:
+The workspace includes a publishable router family built around `lambdamux`:
 
 - `lambdamux` is the user-facing facade crate.
 - `lambdamux-core` contains the generic trie-based routing primitives.
 - `lambdamux-macro` provides the `#[route(...)]` and `generate_routes!()` macros.
 
-If you publish these crates to crates.io, publish them in this order: `lambdamux-core`, `lambdamux-macro`, then `lambdamux`.
+`lambdamux` lets you write route handlers with attributes and dispatch API Gateway requests without managing a global route cache yourself.
+
+## What it gives you
+
+- route registration with `#[route(path = ..., method = ...)]`
+- compile-time route table generation with `generate_routes!()`
+- built-in API Gateway v2 dispatch with `handle_apigw_v2!`
+- built-in API Gateway v1 dispatch with `handle_apigw_v1!`
+- path parameter matching such as `/hello/:id`
 
 ## Prerequisites
 
@@ -23,9 +31,115 @@ Before you begin, ensure you have the following installed:
 - cargo-lambda: A tool to build and deploy AWS Lambda functions written in Rust from [cargo-lambda.info](https://www.cargo-lambda.info/guide/getting-started.html).
 - Terraform: Used for provisioning the AWS infrastructure from [hashicorp.com](https://developer.hashicorp.com/terraform/install).
 
-## Building and Deploying the Lambda Function
+## Installation
 
-### 1. Build and Testing the Lambda Function
+Add these dependencies to your Lambda crate:
+
+```toml
+[dependencies]
+aws_lambda_events = "1.2.0"
+lambda_runtime = "1.3.0"
+serde_json = "1.0"
+tokio = "1.52.3"
+lambdamux = "1.0.0"
+```
+
+Inside this repository, `rust/test_lambda` uses the local workspace crate:
+
+```toml
+lambdamux = { version = "1.0.0", path = "../lambdamux" }
+```
+
+## Quick Start
+
+Create a route module such as `hello.rs`:
+
+```rust
+use aws_lambda_events::apigw::ApiGatewayV2httpRequest;
+use aws_lambda_events::http::Result;
+use lambda_runtime::LambdaEvent;
+use lambdamux::route;
+use serde_json::{json, Value};
+
+#[route(path = "/hello", method = "get")]
+pub fn hello_get(_event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<Value> {
+    Ok(json!({ "success": true }))
+}
+
+#[route(path = "/hello/:id", method = "get")]
+pub fn hello_id_get(event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<Value> {
+    let id = event
+        .payload
+        .path_parameters
+        .get("id")
+        .cloned()
+        .unwrap_or_default();
+
+    Ok(json!({
+        "success": true,
+        "id": id,
+    }))
+}
+
+#[route(path = "/hello", method = "post")]
+pub fn hello_post(event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<Value> {
+    let body = event.payload.body.unwrap_or("{}".into());
+    let body: Value = serde_json::from_str(&body).unwrap_or(json!({}));
+
+    let Some(name) = body.get("name").and_then(|value| value.as_str()) else {
+        return Ok(json!({
+            "success": true,
+            "name": "not found",
+        }));
+    };
+
+    Ok(json!({
+        "success": true,
+        "name": name,
+    }))
+}
+```
+
+Then wire the Lambda entry point in `main.rs`:
+
+```rust
+use aws_lambda_events::apigw::{ApiGatewayV2httpRequest, ApiGatewayV2httpResponse};
+use aws_lambda_events::encodings::Error;
+use lambda_runtime::{service_fn, LambdaEvent};
+
+mod hello;
+use hello::*;
+
+async fn handler(
+    event: LambdaEvent<ApiGatewayV2httpRequest>,
+) -> Result<ApiGatewayV2httpResponse, Error> {
+    lambdamux::handle_apigw_v2!(event)
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Error> {
+    lambda_runtime::run(service_fn(handler)).await
+}
+```
+
+That is enough to route requests like:
+
+- `GET /hello`
+- `GET /hello/123`
+- `POST /hello`
+
+## API Gateway v1
+
+If your Lambda is fronted by API Gateway REST API payloads instead of HTTP API v2 payloads, use `ApiGatewayProxyRequest`, `ApiGatewayProxyResponse`, and the `handle_apigw_v1!` macro instead.
+
+## Building and Testing
+
+Run the workspace tests from the Rust workspace:
+
+```bash
+cd rust
+cargo test --workspace
+```
 
 First, you need to build the Lambda function for the x86_64-unknown-linux-gnu target, which is required for AWS Lambda:
 
@@ -33,11 +147,7 @@ First, you need to build the Lambda function for the x86_64-unknown-linux-gnu ta
 cargo lambda build --release --target x86_64-unknown-linux-gnu
 ```
 
-This will produce a binary in the ./target/lambda/<function-name> directory. This is automatically handled by terraform. To test the suite run the following command.
-
-```bash
-cargo test
-```
+This produces a binary in `target/lambda/<function-name>`. The Terraform example handles this build automatically.
 
 If you only want to test one function/module run the following command.
 
@@ -48,7 +158,7 @@ cargo test --package test_lambda --bin test_lambda -- hello::hello_tests --show-
 cargo test --package test_lambda --bin test_lambda -- hello::hello_tests::hello_get_test --exact --show-output
 ```
 
-### 2. Deploy Using Terraform
+## Deploy Using Terraform
 
 Navigate to the terraform directory where the infrastructure as code files are stored.
 
@@ -70,60 +180,48 @@ terraform apply
 
 Terraform will prompt you to confirm the changes. Type yes to proceed with the deployment.
 
+The Terraform example currently:
+
+- builds the Rust Lambda from `rust/test_lambda`
+- packages it with `cargo lambda build`
+- creates an API Gateway HTTP API
+- forwards `ANY /{proxy+}` to the Lambda function
+
+If your crate path or Lambda binary name is different, update the Terraform `source_path` and function settings before applying.
+
 ## Adding More Functions and Endpoints
 
-To add a rust module (a new lambda function) use the following command.
+Follow the style in `rust/test_lambda` to add route modules, tests, and handlers.
+
+To add another Lambda crate to the workspace:
 
 ```bash
 cd rust
 cargo new test_lambda_2
 ```
 
-Update the cargo.toml with following dependencies.
-
-```toml
-[dependencies]
-aws_lambda_events = "0.15.1"
-lambda_runtime = "0.13.0"
-serde = { version = "1.0.207", features = ["derive"] }
-serde_json = "1.0.124"
-tokio = "1.39.2"
-lambdamux = { path = "../lambdamux" }
-```
-
-Update the `main.rs` of the newly created package as follows. Note that handler function is placed in `main.rs` to provide the maximum configurability. If you wish to move it to a different file you can do it. In that case compiler will likely need you to move the `mod hello; use hello::*` accordingly as well.
-
-```rust
-use aws_lambda_events::apigw::{ApiGatewayV2httpRequest, ApiGatewayV2httpResponse};
-use aws_lambda_events::encodings::Error;
-use lambda_runtime::{service_fn, LambdaEvent};
-// import modules and module functions here
-mod hello;
-use hello::*;
-
-async fn handler(
-    event: LambdaEvent<ApiGatewayV2httpRequest>,
-) -> Result<ApiGatewayV2httpResponse, Error> {
-    lambdamux::handle_apigw_v2!(event)
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Error> {
-    // we initate the event loop here
-    lambda_runtime::run(service_fn(handler)).await
-}
-```
-
-I have added more comments inside the rust files.
+Then add the dependencies from the installation section, wire a handler with `handle_apigw_v2!`, and add Terraform to route traffic to the new Lambda.
 
 ## Authentication
 
-You can authenticate inside the `main.rs` or `hello.rs`. Event object has the complete request context including the auth contexts.
+You can authenticate inside `main.rs` or a route module such as `hello.rs`. The event object includes the complete request context, including API Gateway authorizer context.
 
 ## Development
 
-Follow the style in `test_lambda` folder to add test, routes, etc. You can always add more libraries as needed.
+Useful checks before publishing or deploying:
 
-Now you must add new terraform codes to wire up the lambda to an endpoint. Look at the examples provided in [https://github.com/terraform-aws-modules/terraform-aws-apigateway-v2/tree/master/examples](https://github.com/terraform-aws-modules/terraform-aws-apigateway-v2/tree/master/examples)
+```bash
+cd rust
+cargo test --workspace
+cargo deny check
+```
+
+When publishing the crates manually, publish them in dependency order: `lambdamux-core`, `lambdamux-macro`, then `lambdamux`. The GitHub release workflow follows the same order.
+
+Add Terraform configuration to wire new Lambda functions to API endpoints. The examples in [terraform-aws-apigateway-v2](https://github.com/terraform-aws-modules/terraform-aws-apigateway-v2/tree/master/examples) are a useful reference.
 
 If you are using the new lambda to just receive event, use `serde_json::Value` or `aws_lambda_events` event type to capture (sns, dynamodb, etc). You can also capture events to structs using `serde_json` crate.
+
+## License
+
+Licensed under either GPL-3.0-only or Apache-2.0, at your option.

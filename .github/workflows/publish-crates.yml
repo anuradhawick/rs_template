@@ -25,6 +25,12 @@ jobs:
       - name: Test workspace
         run: cargo test --workspace
 
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@cargo-deny
+
+      - name: Check dependencies
+        run: cargo deny check
+
       - name: Authenticate to crates.io
         id: auth
         uses: rust-lang/crates-io-auth-action@v1

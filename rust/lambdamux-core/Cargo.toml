@@ -1,6 +1,6 @@
 [package]
 name = "lambdamux-core"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 description = "Generic trie-based routing core used by lambdamux"
 license = "GPL-3.0-only OR Apache-2.0"

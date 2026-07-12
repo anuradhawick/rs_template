@@ -1,63 +1,17 @@
 use aws_lambda_events::apigw::{ApiGatewayV2httpRequest, ApiGatewayV2httpResponse};
 use aws_lambda_events::encodings::Error;
-use aws_lambda_events::http::HeaderMap;
 use lambda_runtime::{service_fn, LambdaEvent};
-use once_cell::sync::Lazy;
-use router_container::Trie;
-use router_macro::generate_routes;
 
 mod hello;
 use hello::*;
 
-// TRIE is a special data structure for faster routing
-// this is the only allocation that happens related to routing
-static TRIE: Lazy<Trie<ApiGatewayV2httpRequest>> = Lazy::new(|| generate_routes!());
-
 // this function needs to be async
 // if you like everything to be async, this can be achieved by slight modifications to
-// Handler type in route_container crate
+// Handler type in the lambdamux core crate
 async fn handler(
-    mut event: LambdaEvent<ApiGatewayV2httpRequest>,
+    event: LambdaEvent<ApiGatewayV2httpRequest>,
 ) -> Result<ApiGatewayV2httpResponse, Error> {
-    // construct router trie
-    // extract method and path
-    let method = event.payload.request_context.http.method.as_ref();
-    let path = event
-        .payload
-        .request_context
-        .http
-        .path
-        .as_deref()
-        .unwrap_or("");
-    // get handler and inject path params
-    let Some((handler, params)) = TRIE.route(method, path) else {
-        return Ok(ApiGatewayV2httpResponse {
-            status_code: 404,
-            body: Some("Route not found".into()),
-            ..Default::default()
-        });
-    };
-    event.payload.path_parameters.extend(params.into_iter());
-
-    // try to call handle the routes received here
-    let Ok(value) = handler(event) else {
-        // if failed, report as 500 Server Error
-        return Ok(ApiGatewayV2httpResponse {
-            status_code: 500,
-            body: Some("Internal server error".into()),
-            ..Default::default()
-        });
-    };
-    let mut headers = HeaderMap::new();
-    headers.insert("content-type", "application/json".parse().unwrap());
-
-    Ok(ApiGatewayV2httpResponse {
-        status_code: 200,
-        body: Some(value.to_string().into()),
-        multi_value_headers: headers.clone(),
-        headers,
-        ..Default::default()
-    })
+    lambdamux::handle_apigw_v2!(event)
 }
 
 #[tokio::main]

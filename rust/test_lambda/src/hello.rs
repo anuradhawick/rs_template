@@ -1,7 +1,7 @@
 use aws_lambda_events::apigw::ApiGatewayV2httpRequest;
 use aws_lambda_events::http::Result;
 use lambda_runtime::LambdaEvent;
-use router_macro::route;
+use lambdamux::route;
 use serde_json::{json, Value};
 
 // adding a GET request handler to path /hello

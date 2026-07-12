@@ -2,6 +2,14 @@
 
 This repository contains a Rust-based AWS Lambda function, managed using the cargo-lambda tool and deployed via Terraform.
 
+The workspace now includes a publishable router family built around `lambdamux`:
+
+- `lambdamux` is the user-facing facade crate.
+- `lambdamux-core` contains the generic trie-based routing primitives.
+- `lambdamux-macro` provides the `#[route(...)]` and `generate_routes!()` macros.
+
+If you publish these crates to crates.io, publish them in this order: `lambdamux-core`, `lambdamux-macro`, then `lambdamux`.
+
 ## Prerequisites
 
 Before you begin, ensure you have the following installed:
@@ -75,9 +83,7 @@ lambda_runtime = "0.13.0"
 serde = { version = "1.0.207", features = ["derive"] }
 serde_json = "1.0.124"
 tokio = "1.39.2"
-router_container = { path = "../router_container" }
-router_macro = { path = "../router_macro" }
-once_cell = "1.19.0"
+lambdamux = { path = "../lambdamux" }
 ```
 
 Update the `main.rs` of the newly created package as follows. Note that handler function is placed in `main.rs` to provide the maximum configurability. If you wish to move it to a different file you can do it. In that case compiler will likely need you to move the `mod hello; use hello::*` accordingly as well.
@@ -85,59 +91,15 @@ Update the `main.rs` of the newly created package as follows. Note that handler 
 ```rust
 use aws_lambda_events::apigw::{ApiGatewayV2httpRequest, ApiGatewayV2httpResponse};
 use aws_lambda_events::encodings::Error;
-use aws_lambda_events::http::HeaderMap;
 use lambda_runtime::{service_fn, LambdaEvent};
-use once_cell::sync::Lazy;
-use router_container::Trie;
-use router_macro::generate_routes;
 // import modules and module functions here
 mod hello;
 use hello::*;
 
-// this is the only allocation that happens related to routing
-static TRIE: Lazy<Trie<ApiGatewayV2httpRequest>> = Lazy::new(|| generate_routes!());
-
 async fn handler(
-    mut event: LambdaEvent<ApiGatewayV2httpRequest>,
+    event: LambdaEvent<ApiGatewayV2httpRequest>,
 ) -> Result<ApiGatewayV2httpResponse, Error> {
-    // extract method and path
-    let method = event.payload.request_context.http.method.as_ref();
-    let path = event
-        .payload
-        .request_context
-        .http
-        .path
-        .as_deref()
-        .unwrap_or("");
-    // get handler and inject path params
-    let Some((handler, params)) = TRIE.route(method, path) else {
-        return Ok(ApiGatewayV2httpResponse {
-            status_code: 404,
-            body: Some("Route not found".into()),
-            ..Default::default()
-        });
-    };
-    event.payload.path_parameters.extend(params.into_iter());
-
-    // try to call handle the routes received here
-    let Ok(value) = handler(event) else {
-        // if failed, report as 500 Server Error
-        return Ok(ApiGatewayV2httpResponse {
-            status_code: 500,
-            body: Some("Internal server error".into()),
-            ..Default::default()
-        });
-    };
-    let mut headers = HeaderMap::new();
-    headers.insert("content-type", "application/json".parse().unwrap());
-
-    Ok(ApiGatewayV2httpResponse {
-        status_code: 200,
-        body: Some(value.to_string().into()),
-        multi_value_headers: headers.clone(),
-        headers,
-        ..Default::default()
-    })
+    lambdamux::handle_apigw_v2!(event)
 }
 
 #[tokio::main]

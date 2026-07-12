@@ -1,5 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
+use std::sync::{Mutex, OnceLock};
 use syn::{
     parse::{Parse, ParseStream},
     LitStr, Token,
@@ -41,7 +42,12 @@ impl Parse for LambdaHandler {
     }
 }
 
-static mut ROUTE_ENTRIES: Vec<(String, String, String)> = Vec::new();
+type RouteEntry = (String, String, String);
+
+fn route_entries() -> &'static Mutex<Vec<RouteEntry>> {
+    static ROUTE_ENTRIES: OnceLock<Mutex<Vec<RouteEntry>>> = OnceLock::new();
+    ROUTE_ENTRIES.get_or_init(|| Mutex::new(Vec::new()))
+}
 
 #[proc_macro_attribute]
 pub fn route(args: TokenStream, input: TokenStream) -> TokenStream {
@@ -51,14 +57,10 @@ pub fn route(args: TokenStream, input: TokenStream) -> TokenStream {
     let path = &args.path;
     let method = &args.method;
 
-    println!(
-        "MacroExec - Method: {:?} Path: {:?}",
-        args.method, args.path
-    );
-
-    unsafe {
-        ROUTE_ENTRIES.push((method.into(), path.into(), func_name.to_string()));
-    }
+    route_entries()
+        .lock()
+        .unwrap()
+        .push((method.into(), path.into(), func_name.to_string()));
 
     // Generate function as usual
     let token_stream = quote! {
@@ -72,20 +74,20 @@ pub fn route(args: TokenStream, input: TokenStream) -> TokenStream {
 pub fn generate_routes(_input: TokenStream) -> TokenStream {
     let mut route_inserts = vec![];
 
-    unsafe {
-        for (method, path, handler) in ROUTE_ENTRIES.iter() {
-            let handler_ident = syn::Ident::new(handler, proc_macro2::Span::call_site());
+    let entries = route_entries().lock().unwrap().clone();
 
-            route_inserts.push(quote! {
-                trie.insert(#method, #path, #handler_ident);
-            });
-        }
+    for (method, path, handler) in entries {
+        let handler_ident = syn::Ident::new(&handler, proc_macro2::Span::call_site());
+
+        route_inserts.push(quote! {
+            trie.insert(#method, #path, #handler_ident);
+        });
     }
 
     // return the trie
     let expanded = quote! {
         {
-            use router_container::Trie;
+            use ::lambdamux::Trie;
             let mut trie = Trie::new();
 
             #(#route_inserts)*

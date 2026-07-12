@@ -1,24 +1,35 @@
-use aws_lambda_events::http::Result;
-use lambda_runtime::LambdaEvent;
-use serde_json::Value;
 use std::collections::HashMap;
 
 // Define a type for your route handlers. For simplicity, we use a function pointer that takes no arguments and returns nothing.
-pub type Handler<T> = fn(LambdaEvent<T>) -> Result<Value>;
+pub type Handler<Input, Output, Error> = fn(Input) -> Result<Output, Error>;
 // for all async version follow below
 // pub type Handler<T> = fn(LambdaEvent<T>) -> dyn Future<Output = Result<Value>>;
 // this will be a breaking change and a TODO for now
 
-#[derive(Debug, PartialEq)]
-pub struct TrieNode<T> {
-    children: HashMap<String, TrieNode<T>>,
+#[derive(Debug)]
+pub struct TrieNode<Input, Output, Error> {
+    children: HashMap<String, TrieNode<Input, Output, Error>>,
     is_end_of_path: bool,
     method: Option<String>,
     parameter_name: Option<String>,
-    handler: Option<Handler<T>>,
+    handler: Option<Handler<Input, Output, Error>>,
 }
 
-impl<T> TrieNode<T> {
+impl<Input, Output, Error> PartialEq for TrieNode<Input, Output, Error> {
+    fn eq(&self, other: &Self) -> bool {
+        self.children == other.children
+            && self.is_end_of_path == other.is_end_of_path
+            && self.method == other.method
+            && self.parameter_name == other.parameter_name
+            && match (self.handler, other.handler) {
+                (Some(left), Some(right)) => std::ptr::fn_addr_eq(left, right),
+                (None, None) => true,
+                _ => false,
+            }
+    }
+}
+
+impl<Input, Output, Error> TrieNode<Input, Output, Error> {
     fn new() -> Self {
         TrieNode {
             children: HashMap::new(),
@@ -30,25 +41,31 @@ impl<T> TrieNode<T> {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub struct Trie<T> {
-    root: TrieNode<T>,
+#[derive(Debug)]
+pub struct Trie<Input, Output, Error> {
+    root: TrieNode<Input, Output, Error>,
 }
 
-impl<T> Default for Trie<T> {
+impl<Input, Output, Error> PartialEq for Trie<Input, Output, Error> {
+    fn eq(&self, other: &Self) -> bool {
+        self.root == other.root
+    }
+}
+
+impl<Input, Output, Error> Default for Trie<Input, Output, Error> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T> Trie<T> {
+impl<Input, Output, Error> Trie<Input, Output, Error> {
     pub fn new() -> Self {
         Trie {
             root: TrieNode::new(),
         }
     }
 
-    pub fn insert(&mut self, method: &str, path: &str, handler: Handler<T>) {
+    pub fn insert(&mut self, method: &str, path: &str, handler: Handler<Input, Output, Error>) {
         let mut current_node = &mut self.root;
         let parts = path.split('/').filter(|part| !part.is_empty());
 
@@ -74,7 +91,11 @@ impl<T> Trie<T> {
         current_node.method = Some(method.to_uppercase().to_string());
     }
 
-    pub fn route(&self, method: &str, path: &str) -> Option<(Handler<T>, HashMap<String, String>)> {
+    pub fn route(
+        &self,
+        method: &str,
+        path: &str,
+    ) -> Option<(Handler<Input, Output, Error>, HashMap<String, String>)> {
         let mut current_node = &self.root;
         let mut params = HashMap::new();
 
@@ -105,13 +126,10 @@ impl<T> Trie<T> {
 #[cfg(test)]
 mod trie_tests {
     use crate::{Trie, TrieNode};
-    use aws_lambda_events::{apigw::ApiGatewayV2httpRequest, http::Result};
-    use lambda_runtime::LambdaEvent;
-    use serde_json::{json, Value};
     use std::collections::HashMap;
 
-    fn blank(_e: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<Value> {
-        Ok(json!({"success": true}))
+    fn blank(_e: ()) -> Result<bool, ()> {
+        Ok(true)
     }
 
     #[test]
@@ -173,5 +191,18 @@ mod trie_tests {
             },
         };
         assert_eq!(trie, trie_ref);
+    }
+
+    #[test]
+    fn route_matches_dynamic_path() {
+        let mut trie = Trie::new();
+        trie.insert("get", "/test/:id", blank);
+
+        let Some((handler, params)) = trie.route("GET", "/test/123") else {
+            panic!("expected route match")
+        };
+
+        assert!(handler(()).unwrap());
+        assert_eq!(params.get("id"), Some(&"123".to_string()));
     }
 }

@@ -1,0 +1,17 @@
+[package]
+name = "lambdamux"
+version = "0.1.0"
+edition = "2021"
+description = "AWS Lambda HTTP routing with attribute macros and API Gateway adapters"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/anuradhawick/rs_template"
+readme = "README.md"
+keywords = ["aws", "lambda", "router", "apigateway", "macro"]
+categories = ["web-programming", "api-bindings"]
+
+[dependencies]
+aws_lambda_events = "0.15.1"
+lambda_runtime = "0.13.0"
+lambdamux_core = { package = "lambdamux-core", version = "0.1.0", path = "../lambdamux-core" }
+lambdamux_macro = { package = "lambdamux-macro", version = "0.1.0", path = "../lambdamux-macro" }
+serde_json = "1.0.124"

@@ -10,6 +10,8 @@
 
 It lets you write route handlers with `#[route(...)]` attributes and dispatch API Gateway requests without managing a global route cache yourself.
 
+For a short explanation of how the three crates work together, including the trie router, see [AISUMMARY.md](../../AISUMMARY.md).
+
 ## What it gives you
 
 - route registration with `#[route(path = ..., method = ...)]`

@@ -75,13 +75,12 @@ mod hello_tests {
     #[test]
     fn hello_id_get_test() {
         // create a mock request and call the hello_get function
+        let mut payload = ApiGatewayV2httpRequest::default();
+        payload.path_parameters = HashMap::from([("id".into(), "my_id".into())]);
+
         let res = hello_id_get(LambdaEvent {
             // use defaults
-            payload: ApiGatewayV2httpRequest {
-                // add the path param
-                path_parameters: HashMap::from([("id".into(), "my_id".into())]),
-                ..Default::default()
-            },
+            payload,
             context: Context::default(),
         });
         // assert that result is is not an error
@@ -93,17 +92,13 @@ mod hello_tests {
     #[test]
     fn hello_post_test() {
         // create the payload for testing
-        let payload = ApiGatewayV2httpRequest {
-            // should have the body (POST request)
-            body: Some(
-                json!({
-                    "name": "Anuradha"
-                })
-                .to_string(),
-            ),
-            // rest do not care, use defaults
-            ..Default::default()
-        };
+        let mut payload = ApiGatewayV2httpRequest::default();
+        payload.body = Some(
+            json!({
+                "name": "Anuradha"
+            })
+            .to_string(),
+        );
         // compile the event
         let event = LambdaEvent {
             payload,

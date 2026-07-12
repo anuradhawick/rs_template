@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 // Define a type for your route handlers. For simplicity, we use a function pointer that takes no arguments and returns nothing.
 pub type Handler<Input, Output, Error> = fn(Input) -> Result<Output, Error>;
+pub type RouteMatch<Input, Output, Error> =
+    (Handler<Input, Output, Error>, HashMap<String, String>);
 // for all async version follow below
 // pub type Handler<T> = fn(LambdaEvent<T>) -> dyn Future<Output = Result<Value>>;
 // this will be a breaking change and a TODO for now
@@ -91,11 +93,7 @@ impl<Input, Output, Error> Trie<Input, Output, Error> {
         current_node.method = Some(method.to_uppercase().to_string());
     }
 
-    pub fn route(
-        &self,
-        method: &str,
-        path: &str,
-    ) -> Option<(Handler<Input, Output, Error>, HashMap<String, String>)> {
+    pub fn route(&self, method: &str, path: &str) -> Option<RouteMatch<Input, Output, Error>> {
         let mut current_node = &self.root;
         let mut params = HashMap::new();
 

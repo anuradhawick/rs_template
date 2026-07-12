@@ -31,35 +31,31 @@ pub mod lambda {
     }
 
     fn server_error_v1() -> ApiGatewayProxyResponse {
-        ApiGatewayProxyResponse {
-            status_code: 500,
-            body: Some(Body::Text("Internal server error".into())),
-            ..Default::default()
-        }
+        let mut response = ApiGatewayProxyResponse::default();
+        response.status_code = 500;
+        response.body = Some(Body::Text("Internal server error".into()));
+        response
     }
 
     fn not_found_v1() -> ApiGatewayProxyResponse {
-        ApiGatewayProxyResponse {
-            status_code: 404,
-            body: Some(Body::Text("Route not found".into())),
-            ..Default::default()
-        }
+        let mut response = ApiGatewayProxyResponse::default();
+        response.status_code = 404;
+        response.body = Some(Body::Text("Route not found".into()));
+        response
     }
 
     fn server_error_v2() -> ApiGatewayV2httpResponse {
-        ApiGatewayV2httpResponse {
-            status_code: 500,
-            body: Some(Body::Text("Internal server error".into())),
-            ..Default::default()
-        }
+        let mut response = ApiGatewayV2httpResponse::default();
+        response.status_code = 500;
+        response.body = Some(Body::Text("Internal server error".into()));
+        response
     }
 
     fn not_found_v2() -> ApiGatewayV2httpResponse {
-        ApiGatewayV2httpResponse {
-            status_code: 404,
-            body: Some(Body::Text("Route not found".into())),
-            ..Default::default()
-        }
+        let mut response = ApiGatewayV2httpResponse::default();
+        response.status_code = 404;
+        response.body = Some(Body::Text("Route not found".into()));
+        response
     }
 
     pub mod apigw_v1 {
@@ -90,13 +86,13 @@ pub mod lambda {
 
             let headers = json_headers();
 
-            Ok(ApiGatewayProxyResponse {
-                status_code: 200,
-                body: Some(Body::Text(value.to_string())),
-                multi_value_headers: headers.clone(),
-                headers,
-                ..Default::default()
-            })
+            let mut response = ApiGatewayProxyResponse::default();
+            response.status_code = 200;
+            response.body = Some(Body::Text(value.to_string()));
+            response.multi_value_headers = headers.clone();
+            response.headers = headers;
+
+            Ok(response)
         }
     }
 
@@ -134,13 +130,13 @@ pub mod lambda {
 
             let headers = json_headers();
 
-            Ok(ApiGatewayV2httpResponse {
-                status_code: 200,
-                body: Some(Body::Text(value.to_string())),
-                multi_value_headers: headers.clone(),
-                headers,
-                ..Default::default()
-            })
+            let mut response = ApiGatewayV2httpResponse::default();
+            response.status_code = 200;
+            response.body = Some(Body::Text(value.to_string()));
+            response.multi_value_headers = headers.clone();
+            response.headers = headers;
+
+            Ok(response)
         }
     }
 }

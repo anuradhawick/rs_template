@@ -37,25 +37,21 @@ mod main_tests {
     #[tokio::test]
     async fn routes_hello_post_test() {
         // create the payload for testing
-        let payload = ApiGatewayV2httpRequest {
-            // should have the body (POST request)
-            request_context: ApiGatewayV2httpRequestContext {
-                http: ApiGatewayV2httpRequestContextHttpDescription {
-                    path: Some("/hello".into()),
-                    method: Method::POST,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            body: Some(
-                json!({
-                    "name": "Anuradha"
-                })
-                .to_string(),
-            ),
-            // rest do not care, use defaults
-            ..Default::default()
-        };
+        let mut http = ApiGatewayV2httpRequestContextHttpDescription::default();
+        http.path = Some("/hello".into());
+        http.method = Method::POST;
+
+        let mut request_context = ApiGatewayV2httpRequestContext::default();
+        request_context.http = http;
+
+        let mut payload = ApiGatewayV2httpRequest::default();
+        payload.request_context = request_context;
+        payload.body = Some(
+            json!({
+                "name": "Anuradha"
+            })
+            .to_string(),
+        );
         // compile the event
         let event = LambdaEvent {
             payload,
@@ -81,19 +77,15 @@ mod main_tests {
     #[tokio::test]
     async fn routes_hello_id_post_test() {
         // create the payload for testing
-        let payload = ApiGatewayV2httpRequest {
-            // should have the body (POST request)
-            request_context: ApiGatewayV2httpRequestContext {
-                http: ApiGatewayV2httpRequestContextHttpDescription {
-                    path: Some("/hello/0106".into()),
-                    method: Method::GET,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            // rest do not care, use defaults
-            ..Default::default()
-        };
+        let mut http = ApiGatewayV2httpRequestContextHttpDescription::default();
+        http.path = Some("/hello/0106".into());
+        http.method = Method::GET;
+
+        let mut request_context = ApiGatewayV2httpRequestContext::default();
+        request_context.http = http;
+
+        let mut payload = ApiGatewayV2httpRequest::default();
+        payload.request_context = request_context;
         // compile the event
         let event = LambdaEvent {
             payload,

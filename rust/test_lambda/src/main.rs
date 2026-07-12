@@ -63,8 +63,11 @@ mod main_tests {
         // assert that is is not an error
         assert!(res.is_ok());
 
+        let response = res.unwrap();
+        assert_eq!(201, response.status_code);
+
         // extract the body as string
-        let Body::Text(text) = res.unwrap().body.unwrap() else {
+        let Body::Text(text) = response.body.unwrap() else {
             panic!("Wrong body type returned")
         };
         // unwrap and validate the body; using unwrap in tests is totally fine
@@ -97,8 +100,11 @@ mod main_tests {
         // assert that is is not an error
         assert!(res.is_ok());
 
+        let response = res.unwrap();
+        assert_eq!(200, response.status_code);
+
         // extract the body as string
-        let Body::Text(text) = res.unwrap().body.unwrap() else {
+        let Body::Text(text) = response.body.unwrap() else {
             panic!("Wrong body type returned")
         };
         // unwrap and validate the body; using unwrap in tests is totally fine

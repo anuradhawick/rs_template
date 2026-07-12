@@ -55,7 +55,7 @@ It also provides AWS Lambda/API Gateway integration:
 - `handle_apigw_v1!`
 - `handle_apigw_v2!`
 - API Gateway v1 and v2 dispatch helpers
-- response conversion from `serde_json::Value` to API Gateway JSON responses
+- native API Gateway response return types from route handlers
 
 The facade crate is where generic routing becomes Lambda routing.
 
@@ -121,7 +121,7 @@ That expands to a call into the API Gateway v2 dispatcher. The dispatcher:
 4. Calls `Trie::route(method, path)`.
 5. Extends the event's `path_parameters` with any dynamic route captures.
 6. Calls the matched handler.
-7. Converts the returned `serde_json::Value` into an API Gateway response body.
+7. Returns the handler's API Gateway response object unchanged.
 8. Returns `404` if no route matches, or `500` if the handler returns an error.
 
 The API Gateway v1 flow is the same idea, but reads method/path from the v1 request shape and returns the v1 response type.

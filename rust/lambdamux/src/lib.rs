@@ -1,13 +1,12 @@
 use aws_lambda_events::encodings::Error;
 use aws_lambda_events::http;
 use lambda_runtime::LambdaEvent;
-use serde_json::Value;
 
 pub use lambdamux_core::{Handler, Trie};
 pub use lambdamux_macro::{generate_routes, route};
 
-pub type LambdaHandler<Request> = Handler<LambdaEvent<Request>, Value, http::Error>;
-pub type LambdaTrie<Request> = Trie<LambdaEvent<Request>, Value, http::Error>;
+pub type LambdaHandler<Request, Response> = Handler<LambdaEvent<Request>, Response, http::Error>;
+pub type LambdaTrie<Request, Response> = Trie<LambdaEvent<Request>, Response, http::Error>;
 
 pub mod lambda {
     use std::sync::OnceLock;
@@ -18,17 +17,10 @@ pub mod lambda {
             ApiGatewayV2httpResponse,
         },
         encodings::{Body, Error},
-        http::HeaderMap,
     };
     use lambda_runtime::LambdaEvent;
 
     use crate::LambdaTrie;
-
-    fn json_headers() -> HeaderMap {
-        let mut headers = HeaderMap::new();
-        headers.insert("content-type", "application/json".parse().unwrap());
-        headers
-    }
 
     fn server_error_v1() -> ApiGatewayProxyResponse {
         let mut response = ApiGatewayProxyResponse::default();
@@ -61,14 +53,15 @@ pub mod lambda {
     pub mod apigw_v1 {
         use super::*;
 
-        static ROUTES: OnceLock<LambdaTrie<ApiGatewayProxyRequest>> = OnceLock::new();
+        static ROUTES: OnceLock<LambdaTrie<ApiGatewayProxyRequest, ApiGatewayProxyResponse>> =
+            OnceLock::new();
 
         pub async fn handle<F>(
             mut event: LambdaEvent<ApiGatewayProxyRequest>,
             init: F,
         ) -> Result<ApiGatewayProxyResponse, Error>
         where
-            F: FnOnce() -> LambdaTrie<ApiGatewayProxyRequest>,
+            F: FnOnce() -> LambdaTrie<ApiGatewayProxyRequest, ApiGatewayProxyResponse>,
         {
             let method = event.payload.http_method.as_ref();
             let path = event.payload.path.as_deref().unwrap_or("");
@@ -80,17 +73,9 @@ pub mod lambda {
 
             event.payload.path_parameters.extend(params);
 
-            let Ok(value) = handler(event) else {
+            let Ok(response) = handler(event) else {
                 return Ok(server_error_v1());
             };
-
-            let headers = json_headers();
-
-            let mut response = ApiGatewayProxyResponse::default();
-            response.status_code = 200;
-            response.body = Some(Body::Text(value.to_string()));
-            response.multi_value_headers = headers.clone();
-            response.headers = headers;
 
             Ok(response)
         }
@@ -99,14 +84,15 @@ pub mod lambda {
     pub mod apigw_v2 {
         use super::*;
 
-        static ROUTES: OnceLock<LambdaTrie<ApiGatewayV2httpRequest>> = OnceLock::new();
+        static ROUTES: OnceLock<LambdaTrie<ApiGatewayV2httpRequest, ApiGatewayV2httpResponse>> =
+            OnceLock::new();
 
         pub async fn handle<F>(
             mut event: LambdaEvent<ApiGatewayV2httpRequest>,
             init: F,
         ) -> Result<ApiGatewayV2httpResponse, Error>
         where
-            F: FnOnce() -> LambdaTrie<ApiGatewayV2httpRequest>,
+            F: FnOnce() -> LambdaTrie<ApiGatewayV2httpRequest, ApiGatewayV2httpResponse>,
         {
             let method = event.payload.request_context.http.method.as_ref();
             let path = event
@@ -124,17 +110,9 @@ pub mod lambda {
 
             event.payload.path_parameters.extend(params);
 
-            let Ok(value) = handler(event) else {
+            let Ok(response) = handler(event) else {
                 return Ok(server_error_v2());
             };
-
-            let headers = json_headers();
-
-            let mut response = ApiGatewayV2httpResponse::default();
-            response.status_code = 200;
-            response.body = Some(Body::Text(value.to_string()));
-            response.multi_value_headers = headers.clone();
-            response.headers = headers;
 
             Ok(response)
         }

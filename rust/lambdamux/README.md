@@ -10,7 +10,15 @@
 
 It lets you write route handlers with `#[route(...)]` attributes and dispatch API Gateway requests without managing a global route cache yourself.
 
-For a short explanation of how the three crates work together, including the trie router, see [AISUMMARY.md](../../AISUMMARY.md).
+This repository also includes a Rust AWS Lambda HTTP API template, managed with `cargo-lambda` and deployed with Terraform.
+
+For a short explanation of how the three crates work together, including the trie router, see [AISUMMARY.md](https://github.com/anuradhawick/rs_template/blob/main/AISUMMARY.md).
+
+## Crates
+
+- `lambdamux` is the user-facing facade crate.
+- `lambdamux-core` contains the generic trie-based routing primitives.
+- `lambdamux-macro` provides the `#[route(...)]` and `generate_routes!()` macros.
 
 ## What it gives you
 
@@ -26,11 +34,17 @@ Add these dependencies to your Lambda crate:
 
 ```toml
 [dependencies]
-aws_lambda_events = "1.2.0"
+aws_lambda_events = { version = "1.2.0", default-features = false, features = ["apigw"] }
 lambda_runtime = "1.3.0"
 serde_json = "1.0"
 tokio = "1.52.3"
 lambdamux = "1.0.0"
+```
+
+Inside this repository, `rust/test_lambda` uses the local workspace crate:
+
+```toml
+lambdamux = { version = "1.0.0", path = "../lambdamux" }
 ```
 
 ## Quick Start
@@ -38,19 +52,34 @@ lambdamux = "1.0.0"
 Create a route module such as `hello.rs`:
 
 ```rust
-use aws_lambda_events::apigw::ApiGatewayV2httpRequest;
-use aws_lambda_events::http::Result;
+use aws_lambda_events::apigw::{ApiGatewayV2httpRequest, ApiGatewayV2httpResponse};
+use aws_lambda_events::encodings::Body;
+use aws_lambda_events::http::{HeaderMap, Result};
 use lambda_runtime::LambdaEvent;
 use lambdamux::route;
 use serde_json::{json, Value};
 
+fn json_response(status_code: i64, value: Value) -> ApiGatewayV2httpResponse {
+	let mut headers = HeaderMap::new();
+	headers.insert("content-type", "application/json".parse().unwrap());
+
+	let mut response = ApiGatewayV2httpResponse::default();
+	response.status_code = status_code;
+	response.body = Some(Body::Text(value.to_string()));
+	response.headers = headers.clone();
+	response.multi_value_headers = headers;
+	response
+}
+
 #[route(path = "/hello", method = "get")]
-pub fn hello_get(_event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<Value> {
-	Ok(json!({ "success": true }))
+pub fn hello_get(_event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<ApiGatewayV2httpResponse> {
+	Ok(json_response(200, json!({ "success": true })))
 }
 
 #[route(path = "/hello/:id", method = "get")]
-pub fn hello_id_get(event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<Value> {
+pub fn hello_id_get(
+	event: LambdaEvent<ApiGatewayV2httpRequest>,
+) -> Result<ApiGatewayV2httpResponse> {
 	let id = event
 		.payload
 		.path_parameters
@@ -58,28 +87,28 @@ pub fn hello_id_get(event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<Value
 		.cloned()
 		.unwrap_or_default();
 
-	Ok(json!({
+	Ok(json_response(200, json!({
 		"success": true,
 		"id": id,
-	}))
+	})))
 }
 
 #[route(path = "/hello", method = "post")]
-pub fn hello_post(event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<Value> {
+pub fn hello_post(event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<ApiGatewayV2httpResponse> {
 	let body = event.payload.body.unwrap_or("{}".into());
 	let body: Value = serde_json::from_str(&body).unwrap_or(json!({}));
 
 	let Some(name) = body.get("name").and_then(|value| value.as_str()) else {
-		return Ok(json!({
+		return Ok(json_response(400, json!({
 			"success": true,
 			"name": "not found",
-		}));
+		})));
 	};
 
-	Ok(json!({
+	Ok(json_response(201, json!({
 		"success": true,
 		"name": name,
-	}))
+	})))
 }
 ```
 
@@ -115,6 +144,38 @@ That is enough to route requests like:
 
 If your Lambda is fronted by API Gateway REST API payloads instead of HTTP API v2 payloads, use `ApiGatewayProxyRequest`, `ApiGatewayProxyResponse`, and the `handle_apigw_v1!` macro instead.
 
+## Prerequisites
+
+Before building or deploying the template, install:
+
+- Rust from [rust-lang.org](https://www.rust-lang.org/tools/install)
+- `cargo-lambda` from [cargo-lambda.info](https://www.cargo-lambda.info/guide/getting-started.html)
+- Terraform from [hashicorp.com](https://developer.hashicorp.com/terraform/install)
+
+## Building and Testing
+
+Run the workspace tests from the Rust workspace:
+
+```bash
+cd rust
+cargo test --workspace
+```
+
+Build the Lambda function for the `x86_64-unknown-linux-gnu` target:
+
+```bash
+cargo lambda build --release --target x86_64-unknown-linux-gnu
+```
+
+This produces a binary in `target/lambda/<function-name>`. The Terraform example handles this build automatically.
+
+To run a focused test:
+
+```bash
+cargo test --package test_lambda --bin test_lambda -- hello::hello_tests --show-output
+cargo test --package test_lambda --bin test_lambda -- hello::hello_tests::hello_get_test --exact --show-output
+```
+
 ## Deployment Example
 
 This repository includes a Terraform example that shows how to deploy a `lambdamux` Lambda behind API Gateway:
@@ -137,6 +198,37 @@ terraform apply
 ```
 
 If your crate path or Lambda binary name is different, update the Terraform `source_path` and function settings before applying.
+
+## Adding More Functions and Endpoints
+
+Follow the style in `rust/test_lambda` to add route modules, tests, and handlers.
+
+To add another Lambda crate to the workspace:
+
+```bash
+cd rust
+cargo new test_lambda_2
+```
+
+Then add the dependencies from the installation section, wire a handler with `handle_apigw_v2!`, and add Terraform to route traffic to the new Lambda. The examples in [terraform-aws-apigateway-v2](https://github.com/terraform-aws-modules/terraform-aws-apigateway-v2/tree/master/examples) are a useful reference.
+
+For non-HTTP Lambda events, use `serde_json::Value`, the relevant `aws_lambda_events` event type, or your own `serde` structs.
+
+## Authentication
+
+You can authenticate inside `main.rs` or a route module such as `hello.rs`. The event object includes the complete request context, including API Gateway authorizer context.
+
+## Development
+
+Useful checks before publishing or deploying:
+
+```bash
+cd rust
+cargo test --workspace
+cargo deny check
+```
+
+When publishing the crates manually, publish them in dependency order: `lambdamux-core`, `lambdamux-macro`, then `lambdamux`. The GitHub release workflow follows the same order.
 
 ## Notes
 

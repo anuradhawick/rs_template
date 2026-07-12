@@ -134,3 +134,7 @@ If your crate path or Lambda binary name is different, update the Terraform `sou
 
 - The internal route cache is managed by `lambdamux`; users do not need to define a global `Lazy` or `OnceLock`.
 - `lambdamux` is the user-facing facade crate. The repository also contains `lambdamux-core` and `lambdamux-macro`, but most users only need `lambdamux`.
+
+## License
+
+Licensed under either GPL-3.0-only or Apache-2.0, at your option.

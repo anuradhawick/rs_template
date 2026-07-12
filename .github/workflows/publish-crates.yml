@@ -40,16 +40,10 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
-      - name: Wait for lambdamux-core index update
-        run: sleep 60
-
       - name: Publish lambdamux-macro
         run: cargo publish -p lambdamux-macro
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
-
-      - name: Wait for lambdamux-macro index update
-        run: sleep 60
 
       - name: Publish lambdamux
         run: cargo publish -p lambdamux

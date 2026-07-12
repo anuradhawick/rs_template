@@ -12,22 +12,22 @@ pub type RouteMatch<Input, Output, Error> =
 pub struct TrieNode<Input, Output, Error> {
     children: HashMap<String, TrieNode<Input, Output, Error>>,
     is_end_of_path: bool,
-    method: Option<String>,
     parameter_name: Option<String>,
-    handler: Option<Handler<Input, Output, Error>>,
+    handlers: HashMap<String, Handler<Input, Output, Error>>,
 }
 
 impl<Input, Output, Error> PartialEq for TrieNode<Input, Output, Error> {
     fn eq(&self, other: &Self) -> bool {
         self.children == other.children
             && self.is_end_of_path == other.is_end_of_path
-            && self.method == other.method
             && self.parameter_name == other.parameter_name
-            && match (self.handler, other.handler) {
-                (Some(left), Some(right)) => std::ptr::fn_addr_eq(left, right),
-                (None, None) => true,
-                _ => false,
-            }
+            && self.handlers.len() == other.handlers.len()
+            && self.handlers.iter().all(|(method, handler)| {
+                other
+                    .handlers
+                    .get(method)
+                    .is_some_and(|other_handler| std::ptr::fn_addr_eq(*handler, *other_handler))
+            })
     }
 }
 
@@ -36,9 +36,8 @@ impl<Input, Output, Error> TrieNode<Input, Output, Error> {
         TrieNode {
             children: HashMap::new(),
             is_end_of_path: false,
-            method: None,
             parameter_name: None,
-            handler: None,
+            handlers: HashMap::new(),
         }
     }
 }
@@ -89,8 +88,7 @@ impl<Input, Output, Error> Trie<Input, Output, Error> {
             }
         }
         current_node.is_end_of_path = true;
-        current_node.handler = Some(handler);
-        current_node.method = Some(method.to_uppercase().to_string());
+        current_node.handlers.insert(method.to_uppercase(), handler);
     }
 
     pub fn route(&self, method: &str, path: &str) -> Option<RouteMatch<Input, Output, Error>> {
@@ -100,24 +98,21 @@ impl<Input, Output, Error> Trie<Input, Output, Error> {
         for part in path.split('/').filter(|part| !part.is_empty()) {
             if let Some(node) = current_node.children.get(part) {
                 current_node = node;
-            } else if let Some(param_node) = current_node.children.get(":") {
+            } else {
+                let param_node = current_node.children.get(":")?;
                 if let Some(param_name) = &param_node.parameter_name {
                     params.insert(param_name.clone(), part.to_string());
                 }
                 current_node = param_node;
-            } else {
-                return None;
             }
         }
 
-        if current_node.is_end_of_path
-            && current_node.method.as_deref() == Some(method.to_uppercase().as_str())
-        {
-            let handler = current_node.handler?;
-            Some((handler, params))
-        } else {
-            None
+        if !current_node.is_end_of_path {
+            return None;
         }
+
+        let handler = *current_node.handlers.get(&method.to_uppercase())?;
+        Some((handler, params))
     }
 }
 
@@ -142,15 +137,13 @@ mod trie_tests {
                     TrieNode {
                         children: HashMap::new(),
                         is_end_of_path: true,
-                        method: Some("GET".into()),
                         parameter_name: None,
-                        handler: Some(blank),
+                        handlers: HashMap::from([("GET".into(), blank as _)]),
                     },
                 )]),
                 is_end_of_path: false,
-                method: None,
                 parameter_name: None,
-                handler: None,
+                handlers: HashMap::new(),
             },
         };
         assert_eq!(trie, trie_ref);
@@ -170,22 +163,19 @@ mod trie_tests {
                             ":".into(),
                             TrieNode {
                                 children: HashMap::new(),
-                                handler: Some(blank),
+                                handlers: HashMap::from([("GET".into(), blank as _)]),
                                 is_end_of_path: true,
                                 parameter_name: Some("id".into()),
-                                method: Some("GET".into()),
                             },
                         )]),
                         is_end_of_path: false,
-                        method: None,
                         parameter_name: None,
-                        handler: None,
+                        handlers: HashMap::new(),
                     },
                 )]),
                 is_end_of_path: false,
-                method: None,
                 parameter_name: None,
-                handler: None,
+                handlers: HashMap::new(),
             },
         };
         assert_eq!(trie, trie_ref);
@@ -202,5 +192,27 @@ mod trie_tests {
 
         assert!(handler(()).unwrap());
         assert_eq!(params.get("id"), Some(&"123".to_string()));
+    }
+
+    #[test]
+    fn add_multi_method_route() {
+        fn get(_e: ()) -> Result<bool, ()> {
+            Ok(true)
+        }
+
+        fn post(_e: ()) -> Result<bool, ()> {
+            Ok(false)
+        }
+
+        let mut trie = Trie::new();
+        trie.insert("get", "/", get);
+        trie.insert("post", "/", post);
+
+        let (get_handler, _) = trie.route("GET", "/").expect("expected GET route match");
+        let (post_handler, _) = trie.route("POST", "/").expect("expected POST route match");
+
+        assert!(get_handler(()).unwrap());
+        assert!(!post_handler(()).unwrap());
+        assert!(trie.route("DELETE", "/").is_none());
     }
 }

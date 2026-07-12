@@ -76,19 +76,23 @@ root
 └── hello
     └── :
         ├── parameter_name = "id"
-        ├── method = "GET"
-        └── handler = hello_id_get
+        └── handlers
+            ├── "GET"  = hello_id_get
+            └── "POST" = hello_id_post
 ```
 
 Static path segments are stored by their literal text, such as `hello`. Dynamic path segments such as `:id` are stored under the special key `:`, and the real parameter name, `id`, is stored on the node.
+
+Each terminal node stores a map from normalized uppercase HTTP methods to handlers. This allows the same path to have independent handlers for methods such as `GET` and `POST`. Inserting the same path and method again replaces only that method's handler.
 
 When a request comes in, `Trie::route(method, path)` walks the path segment by segment:
 
 1. It first tries to match the exact static segment.
 2. If there is no exact match, it tries the dynamic `:` child.
 3. If a dynamic segment matches, it records the captured value in a parameter map.
-4. At the final segment, it checks that the node is the end of a registered route and that the HTTP method matches.
-5. If everything matches, it returns the handler and the captured path parameters.
+4. At the final segment, it checks that the node is the end of a registered route.
+5. It normalizes the requested HTTP method to uppercase and looks up its handler in the node's handler map.
+6. If everything matches, it returns the handler and the captured path parameters.
 
 For example:
 

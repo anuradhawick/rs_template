@@ -1,0 +1,51 @@
+name: Publish crates
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Test workspace
+        run: cargo test --workspace
+
+      - name: Authenticate to crates.io
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1
+
+      - name: Publish lambdamux-core
+        run: cargo publish -p lambdamux-core
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+      - name: Wait for lambdamux-core index update
+        run: sleep 60
+
+      - name: Publish lambdamux-macro
+        run: cargo publish -p lambdamux-macro
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+      - name: Wait for lambdamux-macro index update
+        run: sleep 60
+
+      - name: Publish lambdamux
+        run: cargo publish -p lambdamux
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}

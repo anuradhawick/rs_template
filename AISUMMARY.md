@@ -10,12 +10,13 @@
 
 Its main pieces are:
 
-- `Handler<Input, Output, Error>`: a function pointer type for route handlers.
+- `HandlerFuture<Output, Error>`: a boxed, sendable future returned by an internal route handler.
+- `Handler<Input, Output, Error>`: a function pointer that accepts the route input and returns a `HandlerFuture`.
 - `RouteMatch<Input, Output, Error>`: the matched handler plus extracted path parameters.
 - `Trie<Input, Output, Error>`: the route table.
 - `TrieNode<Input, Output, Error>`: one segment in the route tree.
 
-The core crate is generic over `Input`, `Output`, and `Error`, so the same routing structure can be used with Lambda events today and other handler shapes later.
+The core crate is generic over `Input`, `Output`, and `Error`. Its handler representation is asynchronous internally, while the macro layer adapts both synchronous and asynchronous user functions into that representation.
 
 ### `lambdamux-macro`
 
@@ -24,9 +25,9 @@ The core crate is generic over `Input`, `Output`, and `Error`, so the same routi
 - `#[route(path = "...", method = "...")]`
 - `generate_routes!()`
 
-The `#[route]` attribute parses the route metadata and records the function name, HTTP method, and path in a process-local list while the crate is being compiled. The function itself is emitted unchanged.
+The `#[route]` attribute parses the route metadata and records the function name, HTTP method, path, and whether the function is asynchronous in a process-local list while the crate is being compiled. The function itself is emitted unchanged.
 
-`generate_routes!()` reads the recorded route entries and expands to code that creates a `Trie`, then inserts each route into it.
+`generate_routes!()` reads the recorded route entries and expands to code that creates a `Trie`, then inserts each route into it. Async functions are boxed directly; synchronous functions are wrapped in an async block first. This means both forms can coexist in one route table.
 
 For example, annotated handlers eventually become generated code shaped like this:
 
@@ -35,9 +36,11 @@ For example, annotated handlers eventually become generated code shaped like thi
     use ::lambdamux::Trie;
     let mut trie = Trie::new();
 
-    trie.insert("get", "/hello", hello_get);
-    trie.insert("get", "/hello/:id", hello_id_get);
-    trie.insert("post", "/hello", hello_post);
+    trie.insert("get", "/hello", |event| Box::pin(hello_get(event)));
+    trie.insert("get", "/hello/:id", |event| {
+        Box::pin(async move { hello_id_get(event) })
+    });
+    trie.insert("post", "/hello", |event| Box::pin(hello_post(event)));
 
     trie
 }
@@ -124,7 +127,7 @@ That expands to a call into the API Gateway v2 dispatcher. The dispatcher:
 3. Reads the HTTP method and path from the API Gateway event.
 4. Calls `Trie::route(method, path)`.
 5. Extends the event's `path_parameters` with any dynamic route captures.
-6. Calls the matched handler.
+6. Calls and awaits the matched handler.
 7. Returns the handler's API Gateway response object unchanged.
 8. Returns `404` if no route matches, or `500` if the handler returns an error.
 

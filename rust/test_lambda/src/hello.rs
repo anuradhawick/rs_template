@@ -19,7 +19,9 @@ fn json_response(status_code: i64, value: Value) -> ApiGatewayV2httpResponse {
 
 // adding a GET request handler to path /hello
 #[route(path = "/hello", method = "get")]
-pub fn hello_get(_event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<ApiGatewayV2httpResponse> {
+pub async fn hello_get(
+    _event: LambdaEvent<ApiGatewayV2httpRequest>,
+) -> Result<ApiGatewayV2httpResponse> {
     Ok(json_response(200, json!({ "success": true })))
 }
 
@@ -45,7 +47,9 @@ pub fn hello_id_get(
 
 // adding a POST request handler to path /hello
 #[route(path = "/hello", method = "post")]
-pub fn hello_post(event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<ApiGatewayV2httpResponse> {
+pub async fn hello_post(
+    event: LambdaEvent<ApiGatewayV2httpRequest>,
+) -> Result<ApiGatewayV2httpResponse> {
     // parsing the event body getting the serde_json::Value object
     // using unwrap_or(default) is recommended for smaller objects (like empty json)
     // if this becomes massive, use unwrap_or_else(|| "{}",into())
@@ -88,14 +92,15 @@ mod hello_tests {
         serde_json::from_str(&text).unwrap()
     }
 
-    #[test]
-    fn hello_get_test() {
+    #[tokio::test]
+    async fn hello_get_test() {
         // create a mock request and call the hello_get function
         let res = hello_get(LambdaEvent {
             // use defaults
             payload: ApiGatewayV2httpRequest::default(),
             context: Context::default(),
-        });
+        })
+        .await;
         // assert that result is is not an error
         assert!(res.is_ok());
         let response = res.unwrap();
@@ -124,8 +129,8 @@ mod hello_tests {
         );
     }
 
-    #[test]
-    fn hello_post_test() {
+    #[tokio::test]
+    async fn hello_post_test() {
         // create the payload for testing
         let mut payload = ApiGatewayV2httpRequest::default();
         payload.body = Some(
@@ -141,7 +146,7 @@ mod hello_tests {
             context: Context::default(),
         };
         // get the result object
-        let res = hello_post(event);
+        let res = hello_post(event).await;
         // assert that is is not an error
         assert!(res.is_ok());
         let response = res.unwrap();

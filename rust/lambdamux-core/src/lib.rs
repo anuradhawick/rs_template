@@ -1,12 +1,12 @@
 use std::collections::HashMap;
+use std::future::Future;
+use std::pin::Pin;
 
-// Define a type for your route handlers. For simplicity, we use a function pointer that takes no arguments and returns nothing.
-pub type Handler<Input, Output, Error> = fn(Input) -> Result<Output, Error>;
+pub type HandlerFuture<Output, Error> =
+    Pin<Box<dyn Future<Output = Result<Output, Error>> + Send + 'static>>;
+pub type Handler<Input, Output, Error> = fn(Input) -> HandlerFuture<Output, Error>;
 pub type RouteMatch<Input, Output, Error> =
     (Handler<Input, Output, Error>, HashMap<String, String>);
-// for all async version follow below
-// pub type Handler<T> = fn(LambdaEvent<T>) -> dyn Future<Output = Result<Value>>;
-// this will be a breaking change and a TODO for now
 
 #[derive(Debug)]
 pub struct TrieNode<Input, Output, Error> {
@@ -118,11 +118,21 @@ impl<Input, Output, Error> Trie<Input, Output, Error> {
 
 #[cfg(test)]
 mod trie_tests {
-    use crate::{Trie, TrieNode};
+    use crate::{HandlerFuture, Trie, TrieNode};
     use std::collections::HashMap;
+    use std::task::{Context, Poll, Waker};
 
-    fn blank(_e: ()) -> Result<bool, ()> {
-        Ok(true)
+    fn ready_result<T>(mut future: HandlerFuture<T, ()>) -> Result<T, ()> {
+        let mut context = Context::from_waker(Waker::noop());
+
+        match future.as_mut().poll(&mut context) {
+            Poll::Ready(result) => result,
+            Poll::Pending => panic!("test handler unexpectedly returned a pending future"),
+        }
+    }
+
+    fn blank(_e: ()) -> HandlerFuture<bool, ()> {
+        Box::pin(async { Ok(true) })
     }
 
     #[test]
@@ -190,18 +200,18 @@ mod trie_tests {
             panic!("expected route match")
         };
 
-        assert!(handler(()).unwrap());
+        assert!(ready_result(handler(())).unwrap());
         assert_eq!(params.get("id"), Some(&"123".to_string()));
     }
 
     #[test]
     fn add_multi_method_route() {
-        fn get(_e: ()) -> Result<bool, ()> {
-            Ok(true)
+        fn get(_e: ()) -> HandlerFuture<bool, ()> {
+            Box::pin(async { Ok(true) })
         }
 
-        fn post(_e: ()) -> Result<bool, ()> {
-            Ok(false)
+        fn post(_e: ()) -> HandlerFuture<bool, ()> {
+            Box::pin(async { Ok(false) })
         }
 
         let mut trie = Trie::new();
@@ -211,8 +221,8 @@ mod trie_tests {
         let (get_handler, _) = trie.route("GET", "/").expect("expected GET route match");
         let (post_handler, _) = trie.route("POST", "/").expect("expected POST route match");
 
-        assert!(get_handler(()).unwrap());
-        assert!(!post_handler(()).unwrap());
+        assert!(ready_result(get_handler(())).unwrap());
+        assert!(!ready_result(post_handler(())).unwrap());
         assert!(trie.route("DELETE", "/").is_none());
     }
 }

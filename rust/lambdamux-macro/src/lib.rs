@@ -42,7 +42,7 @@ impl Parse for LambdaHandler {
     }
 }
 
-type RouteEntry = (String, String, String);
+type RouteEntry = (String, String, String, bool);
 
 fn route_entries() -> &'static Mutex<Vec<RouteEntry>> {
     static ROUTE_ENTRIES: OnceLock<Mutex<Vec<RouteEntry>>> = OnceLock::new();
@@ -56,11 +56,14 @@ pub fn route(args: TokenStream, input: TokenStream) -> TokenStream {
     let func_name = &function.sig.ident;
     let path = &args.path;
     let method = &args.method;
+    let is_async = function.sig.asyncness.is_some();
 
-    route_entries()
-        .lock()
-        .unwrap()
-        .push((method.into(), path.into(), func_name.to_string()));
+    route_entries().lock().unwrap().push((
+        method.into(),
+        path.into(),
+        func_name.to_string(),
+        is_async,
+    ));
 
     // Generate function as usual
     let token_stream = quote! {
@@ -76,11 +79,20 @@ pub fn generate_routes(_input: TokenStream) -> TokenStream {
 
     let entries = route_entries().lock().unwrap().clone();
 
-    for (method, path, handler) in entries {
+    for (method, path, handler, is_async) in entries {
         let handler_ident = syn::Ident::new(&handler, proc_macro2::Span::call_site());
+        let handler = if is_async {
+            quote! {
+                |event| ::std::boxed::Box::pin(#handler_ident(event))
+            }
+        } else {
+            quote! {
+                |event| ::std::boxed::Box::pin(async move { #handler_ident(event) })
+            }
+        };
 
         route_inserts.push(quote! {
-            trie.insert(#method, #path, #handler_ident);
+            trie.insert(#method, #path, #handler);
         });
     }
 

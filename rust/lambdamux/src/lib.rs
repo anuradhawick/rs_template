@@ -4,7 +4,7 @@ use aws_lambda_events::encodings::Error;
 use aws_lambda_events::http;
 use lambda_runtime::LambdaEvent;
 
-pub use lambdamux_core::{Handler, Trie};
+pub use lambdamux_core::{Handler, HandlerFuture, Trie};
 pub use lambdamux_macro::{generate_routes, route};
 
 pub type LambdaHandler<Request, Response> = Handler<LambdaEvent<Request>, Response, http::Error>;
@@ -75,7 +75,7 @@ pub mod lambda {
 
             event.payload.path_parameters.extend(params);
 
-            let Ok(response) = handler(event) else {
+            let Ok(response) = handler(event).await else {
                 return Ok(server_error_v1());
             };
 
@@ -112,7 +112,7 @@ pub mod lambda {
 
             event.payload.path_parameters.extend(params);
 
-            let Ok(response) = handler(event) else {
+            let Ok(response) = handler(event).await else {
                 return Ok(server_error_v2());
             };
 

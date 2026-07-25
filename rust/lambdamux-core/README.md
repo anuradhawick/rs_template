@@ -2,7 +2,7 @@
 
 `lambdamux-core` contains the generic routing primitives used by `lambdamux`.
 
-It provides the trie-based matcher and generic handler type aliases without depending on AWS Lambda event types.
+It provides the trie-based matcher and boxed-future handler type aliases without depending on AWS Lambda event types. The `lambdamux` macros adapt both synchronous and asynchronous route functions to this internal handler representation.
 
 ## License
 

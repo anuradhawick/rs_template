@@ -26,6 +26,7 @@ For a short explanation of how the three crates work together, including the tri
 - compile-time route table generation with `generate_routes!()`
 - built-in API Gateway v2 dispatch with `handle_apigw_v2!`
 - built-in API Gateway v1 dispatch with `handle_apigw_v1!`
+- synchronous and asynchronous route handlers in the same route table
 - path parameter matching such as `/hello/:id`
 
 ## Installation
@@ -72,7 +73,9 @@ fn json_response(status_code: i64, value: Value) -> ApiGatewayV2httpResponse {
 }
 
 #[route(path = "/hello", method = "get")]
-pub fn hello_get(_event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<ApiGatewayV2httpResponse> {
+pub async fn hello_get(
+	_event: LambdaEvent<ApiGatewayV2httpRequest>,
+) -> Result<ApiGatewayV2httpResponse> {
 	Ok(json_response(200, json!({ "success": true })))
 }
 
@@ -94,7 +97,9 @@ pub fn hello_id_get(
 }
 
 #[route(path = "/hello", method = "post")]
-pub fn hello_post(event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<ApiGatewayV2httpResponse> {
+pub async fn hello_post(
+	event: LambdaEvent<ApiGatewayV2httpRequest>,
+) -> Result<ApiGatewayV2httpResponse> {
 	let body = event.payload.body.unwrap_or("{}".into());
 	let body: Value = serde_json::from_str(&body).unwrap_or(json!({}));
 
@@ -139,6 +144,28 @@ That is enough to route requests like:
 - `GET /hello`
 - `GET /hello/123`
 - `POST /hello`
+
+## Synchronous and asynchronous routes
+
+Route handlers can be synchronous or asynchronous, and both forms can be mixed in the same Lambda:
+
+```rust,ignore
+#[route(path = "/health", method = "get")]
+pub fn health(
+	event: LambdaEvent<ApiGatewayV2httpRequest>,
+) -> Result<ApiGatewayV2httpResponse> {
+	// Return a response directly.
+}
+
+#[route(path = "/users/:id", method = "get")]
+pub async fn user(
+	event: LambdaEvent<ApiGatewayV2httpRequest>,
+) -> Result<ApiGatewayV2httpResponse> {
+	// Await database, HTTP, or other asynchronous work before returning.
+}
+```
+
+No extra dispatch setup is needed. `handle_apigw_v1!` and `handle_apigw_v2!` await the selected route internally.
 
 ## API Gateway v1
 

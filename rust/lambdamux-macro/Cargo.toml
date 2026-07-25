@@ -1,6 +1,6 @@
 [package]
 name = "lambdamux-macro"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2021"
 description = "Procedural macros for declaring lambdamux routes"
 license = "GPL-3.0-only OR Apache-2.0"
@@ -15,4 +15,4 @@ proc-macro = true
 [dependencies]
 proc-macro2 = "1.0.79"
 quote = "1.0.35"
-syn = { version = "2.0.58", features = ["full"] }
+syn = { version = "3.0.3", features = ["full"] }

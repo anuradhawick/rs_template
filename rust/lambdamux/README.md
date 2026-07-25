@@ -51,7 +51,7 @@ lambdamux = { version = "1.0.1", path = "../lambdamux" }
 
 Create a route module such as `hello.rs`:
 
-```rust
+```rust,ignore
 use aws_lambda_events::apigw::{ApiGatewayV2httpRequest, ApiGatewayV2httpResponse};
 use aws_lambda_events::encodings::Body;
 use aws_lambda_events::http::{HeaderMap, Result};
@@ -114,7 +114,7 @@ pub fn hello_post(event: LambdaEvent<ApiGatewayV2httpRequest>) -> Result<ApiGate
 
 Then wire the Lambda entry point in `main.rs`:
 
-```rust
+```rust,ignore
 use aws_lambda_events::apigw::{ApiGatewayV2httpRequest, ApiGatewayV2httpResponse};
 use aws_lambda_events::encodings::Error;
 use lambda_runtime::{service_fn, LambdaEvent};
@@ -180,7 +180,7 @@ cargo test --package test_lambda --bin test_lambda -- hello::hello_tests::hello_
 
 This repository includes a Terraform example that shows how to deploy a `lambdamux` Lambda behind API Gateway:
 
-- Terraform example: https://github.com/anuradhawick/rs_template/tree/main/terraform
+- Terraform example: <https://github.com/anuradhawick/rs_template/tree/main/terraform>
 
 That example currently:
 

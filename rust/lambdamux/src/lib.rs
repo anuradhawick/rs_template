@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 use aws_lambda_events::encodings::Error;
 use aws_lambda_events::http;
 use lambda_runtime::LambdaEvent;

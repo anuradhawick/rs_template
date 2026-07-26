@@ -3,7 +3,8 @@ provider "aws" {
 }
 
 module "lambda_function" {
-  source = "terraform-aws-modules/lambda/aws"
+  source  = "terraform-aws-modules/lambda/aws"
+  version = "8.8.0"
 
   function_name = "test_lambda"
   description   = "rust lambda function"

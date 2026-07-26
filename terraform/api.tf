@@ -1,5 +1,6 @@
 module "app_api" {
-  source = "terraform-aws-modules/apigateway-v2/aws"
+  source  = "terraform-aws-modules/apigateway-v2/aws"
+  version = "6.1.0"
 
   name          = "${var.app-name}-http-api"
   description   = "${var.app-name} HTTP API Gateway"

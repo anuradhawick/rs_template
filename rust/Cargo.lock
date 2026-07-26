@@ -314,7 +314,7 @@ dependencies = [
 
 [[package]]
 name = "lambdamux"
-version = "1.0.2"
+version = "1.0.3"
 dependencies = [
  "aws_lambda_events",
  "lambda_runtime",
@@ -324,11 +324,11 @@ dependencies = [
 
 [[package]]
 name = "lambdamux-core"
-version = "1.0.2"
+version = "1.0.3"
 
 [[package]]
 name = "lambdamux-macro"
-version = "1.0.2"
+version = "1.0.3"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -39,13 +39,13 @@ aws_lambda_events = { version = "1.2.0", default-features = false, features = ["
 lambda_runtime = "1.3.0"
 serde_json = "1.0"
 tokio = "1.52.3"
-lambdamux = "1.0.2"
+lambdamux = "1.0.3"
 ```
 
 Inside this repository, `rust/test_lambda` uses the local workspace crate:
 
 ```toml
-lambdamux = { version = "1.0.2", path = "../lambdamux" }
+lambdamux = { version = "1.0.3", path = "../lambdamux" }
 ```
 
 ## Quick Start

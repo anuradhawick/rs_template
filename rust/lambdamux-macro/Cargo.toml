@@ -1,6 +1,6 @@
 [package]
 name = "lambdamux-macro"
-version = "1.0.2"
+version = "1.0.3"
 edition = "2021"
 description = "Procedural macros for declaring lambdamux routes"
 license = "GPL-3.0-only OR Apache-2.0"

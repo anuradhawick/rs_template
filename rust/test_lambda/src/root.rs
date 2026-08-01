@@ -5,37 +5,17 @@ use lambda_runtime::LambdaEvent;
 use lambdamux::route;
 use serde_json::{json, Value};
 
-// adding a GET request handler to path /hello
-#[route(path = "/hello", method = "get")]
-pub async fn hello_get(
+// adding a GET request handler to path /
+#[route(path = "/", method = "get")]
+pub async fn root_get(
     _event: LambdaEvent<ApiGatewayV2httpRequest>,
 ) -> Result<ApiGatewayV2httpResponse> {
     Ok(json_response(200, json!({ "success": true })))
 }
 
-// adding a GET request handler to path /hello/:id to demo path params
-#[route(path = "/hello/:id", method = "get")]
-pub fn hello_id_get(
-    event: LambdaEvent<ApiGatewayV2httpRequest>,
-) -> Result<ApiGatewayV2httpResponse> {
-    let id = event
-        .payload
-        .path_parameters
-        .get("id")
-        .unwrap_or(&String::from(""))
-        .clone();
-    Ok(json_response(
-        200,
-        json!({
-            "success": true,
-            "id": id
-        }),
-    ))
-}
-
-// adding a POST request handler to path /hello
-#[route(path = "/hello", method = "post")]
-pub async fn hello_post(
+// adding a POST request handler to path /
+#[route(path = "/", method = "post")]
+pub async fn root_post(
     event: LambdaEvent<ApiGatewayV2httpRequest>,
 ) -> Result<ApiGatewayV2httpResponse> {
     // parsing the event body getting the serde_json::Value object
@@ -66,9 +46,7 @@ pub async fn hello_post(
 }
 
 #[cfg(test)]
-mod hello_tests {
-    use std::collections::HashMap;
-
+mod root_tests {
     use super::*;
     use aws_lambda_events::encodings::Body;
     use lambda_runtime::Context;
@@ -82,9 +60,9 @@ mod hello_tests {
     }
 
     #[tokio::test]
-    async fn hello_get_test() {
-        // create a mock request and call the hello_get function
-        let res = hello_get(LambdaEvent {
+    async fn root_get_test() {
+        // create a mock request and call the root_get function
+        let res = root_get(LambdaEvent {
             // use defaults
             payload: ApiGatewayV2httpRequest::default(),
             context: Context::default(),
@@ -97,29 +75,8 @@ mod hello_tests {
         assert_eq!(json!({ "success": true }), response_body(response));
     }
 
-    #[test]
-    fn hello_id_get_test() {
-        // create a mock request and call the hello_get function
-        let mut payload = ApiGatewayV2httpRequest::default();
-        payload.path_parameters = HashMap::from([("id".into(), "my_id".into())]);
-
-        let res = hello_id_get(LambdaEvent {
-            // use defaults
-            payload,
-            context: Context::default(),
-        });
-        // assert that result is is not an error
-        assert!(res.is_ok());
-        let response = res.unwrap();
-        assert_eq!(200, response.status_code);
-        assert_eq!(
-            json!({ "success": true, "id": "my_id" }),
-            response_body(response)
-        );
-    }
-
     #[tokio::test]
-    async fn hello_post_test() {
+    async fn root_post_test() {
         // create the payload for testing
         let mut payload = ApiGatewayV2httpRequest::default();
         payload.body = Some(
@@ -135,7 +92,7 @@ mod hello_tests {
             context: Context::default(),
         };
         // get the result object
-        let res = hello_post(event).await;
+        let res = root_post(event).await;
         // assert that is is not an error
         assert!(res.is_ok());
         let response = res.unwrap();
